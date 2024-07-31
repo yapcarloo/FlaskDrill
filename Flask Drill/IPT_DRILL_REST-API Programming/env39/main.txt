@@ -1,0 +1,174 @@
+from flask import Flask, jsonify, make_response, request
+from flask_mysqldb import MySQL
+from functools import wraps
+import MySQLdb
+
+app = Flask(__name__)
+
+# MySQL configurations
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = 'root'
+app.config['MYSQL_DB'] = 'mung_beans_final'
+app.config['MYSQL_HOST'] = 'localhost'
+
+# Initialize MySQL
+mysql = MySQL(app)
+
+# Sample API key for demonstration (in a real application, store this securely)
+API_KEY = "your_actual_api_key"
+
+# Decorator to require API key
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-KEY')
+        if api_key and api_key == API_KEY:
+            return f(*args, **kwargs)
+        else:
+            response = jsonify({"error": "Unauthorized"})
+            response.status_code = 401
+            return response
+    return decorated_function
+
+@app.route("/customer/<int:id>/customer_satisfaction", methods=["GET"])
+@require_api_key
+def get_customer_by_id_Customer(id):
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+        
+        query = """
+            SELECT customer.id_Customer, customer_satisfaction.rate
+            FROM customer
+            INNER JOIN customer_satisfaction
+            ON customer.id_Customer = customer_satisfaction.customer_id
+            WHERE customer.id_Customer = %s
+        """
+        cursor.execute(query, (id,))
+        data = cursor.fetchall()
+        
+        response = make_response(
+            jsonify({"id_Customer": id, "count": len(data), "customer": data}), 200
+        )
+        return response
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Route for adding a customer via POST
+@app.route("/customer", methods=["POST"])
+@require_api_key
+def add_customer():
+    try:
+        info = request.get_json()
+        id_Customer = info ["id_Customer"]
+        Last_name = info["Last_name"]
+        First_name = info["First_name"]
+        Contact_No = info["Contact_No"]
+        Email = info ["Email"]
+        Location = info ["Location"]
+        Password = info ["Password"]
+
+        cur = mysql.connection.cursor()
+        cur.execute(
+            """INSERT INTO  customer SET Last_name = %s, First_name = %s, Contact_No = %s, Email = %s, Location = %s, Password = %s, WHERE id_Customer = %s""",
+            (id_Customer, Last_name, First_name,  Contact_No, Email, Location, Password),
+        )
+        
+        mysql.connection.commit()
+
+        rows_affected = cur.rowcount
+        cur.close()
+
+        return make_response(
+            jsonify(
+                {"message": "Customer added successfully", "rows_affected": rows_affected}
+            ),
+            201,
+        )
+    except KeyError as e:
+        # Handle missing keys in JSON payload
+        error_message = f"KeyError: Missing key '{e.args[0]}' in JSON payload"
+        return make_response(jsonify({"error": error_message}), 400)
+    except Exception as e:
+        # Handle any other exceptions
+        return make_response(jsonify({"error": str(e)}), 500)
+
+# Route for updating a customer via PUT
+@app.route("/customer/<int:id>", methods=["PUT"])
+@require_api_key
+def update_customer(id):
+    try:
+        info = request.get_json()
+        id_Customer = info ["id_Customer"]
+        Last_name = info["Last_name"]
+        First_name = info["First_name"]
+        Contact_No = info["Contact_No"]
+        Email = info ["Email"]
+        Location = info ["Location"]
+        Password = info ["Password"]
+
+        cur = mysql.connection.cursor()
+        cur.execute(
+            """UPDATE customer SET Last_name = %s, First_name = %s, Contact_No = %s, Email = %s, Location = %s, Password = %s, WHERE id_Customer = %s""",
+            (id_Customer, Last_name, First_name,  Contact_No, Email, Location, Password),
+        )
+        mysql.connection.commit()
+
+        rows_affected = cur.rowcount
+        cur.close()
+
+        return make_response(
+            jsonify(
+                {"message": "Customer updated successfully", "rows_affected": rows_affected}
+            ),
+            200,
+        )
+    except KeyError as e:
+        # Handle missing keys in JSON payload
+        error_message = f"KeyError: Missing key '{e.args[0]}' in JSON payload"
+        return make_response(jsonify({"error": error_message}), 400)
+    except Exception as e:
+        # Handle any other exceptions
+        return make_response(jsonify({"error": str(e)}), 500)
+
+# Route for deleting a customer via DELETE
+@app.route("/customer/<int:id>/customer_satisfaction", methods=["DELETE"])
+def delete_customer_satisfaction(id):
+    try:
+        conn = mysql.connection  # Get the database connection
+        cur = conn.cursor()
+        cur.execute("DELETE FROM customer_satisfaction WHERE id = %s", (id,))
+        conn.commit()
+
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(jsonify({"error": "No customer satisfaction data found with the specified ID"}), 404)
+        
+        return make_response(jsonify({"message": "Customer satisfaction data deleted successfully", "rows_affected": rows_affected}), 200)
+    except Exception as e:
+        return make_response(jsonify({"error": str(e)}), 500)@app.route("/customer/<int:id>/customer_satisfaction", methods=["DELETE"])
+def delete_customer_satisfaction(id):
+    try:
+        conn = mysql.connection  # Get the database connection
+        cur = conn.cursor()
+        cur.execute("DELETE FROM customer_satisfaction WHERE id = %s", (id,))
+        conn.commit()
+
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(jsonify({"error": "No customer satisfaction data found with the specified ID"}), 404)
+        
+        return make_response(jsonify({"message": "Customer satisfaction data deleted successfully", "rows_affected": rows_affected}), 200)
+    except Exception as e:
+        return make_response(jsonify({"error": str(e)}), 500)
+
+if __name__ == "__main__":
+    app.run(debug=True)
